@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:email_validator/email_validator.dart';
 import 'package:flutter/material.dart';
+import 'network_utils/api.dart';
 import 'register_screen.dart';
+import 'package:awesome_dialog/awesome_dialog.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'maps.dart';
 
 class LoginPage extends StatefulWidget {
@@ -13,6 +17,9 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading=false;
+  TextEditingController emailController = new TextEditingController();
+  TextEditingController passwordController = new TextEditingController();
   var rememberValue = false;
 
   @override
@@ -48,6 +55,7 @@ class _LoginPageState extends State<LoginPage> {
                         ? null
                         : "Please enter a valid email",
                     maxLines: 1,
+                    controller: emailController,
                     decoration: InputDecoration(
                       hintText: 'Enter your email',
                       prefixIcon: const Icon(Icons.email),
@@ -67,6 +75,7 @@ class _LoginPageState extends State<LoginPage> {
                       return null;
                     },
                     maxLines: 1,
+                    controller: passwordController,
                     obscureText: true,
                     decoration: InputDecoration(
                       prefixIcon: const Icon(Icons.lock),
@@ -97,15 +106,16 @@ class _LoginPageState extends State<LoginPage> {
                   ElevatedButton(
                     onPressed: () {
                       if (_formKey.currentState.validate()) {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) {
-                              return MapScreen();
-                            },
-                          ),
-                              (route) => false,
-                        );
+                        _login();
+                        // Navigator.pushAndRemoveUntil(
+                        //   context,
+                        //   MaterialPageRoute(
+                        //     builder: (context) {
+                        //       return MapScreen();
+                        //     },
+                        //   ),
+                        //       (route) => false,
+                        // );
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -146,5 +156,77 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ),
     );
+  }
+  void _login()async{
+    setState(() {
+      _isLoading=true;
+    });
+    var data = {
+      'email' : emailController.text,
+      'password': passwordController.text,
+    };
+
+    print(data);
+
+
+
+    var res = await Network().authData(data, '/login');
+
+    print(res.body);
+
+    var body = json.decode(res.body);
+
+    print(body['message']);
+
+    if(body['message']=='Invalid login details'){
+      AwesomeDialog(
+        context: context,
+        dialogType: DialogType.ERROR,
+        animType: AnimType.BOTTOMSLIDE,
+        title: 'Opps!',
+        desc: body['message'],
+        btnCancelOnPress: () {},
+        btnOkOnPress: () {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) {
+                return LoginPage();
+              },
+            ),
+                (route) => false,
+          );
+        },
+      ).show();
+    }
+
+
+    if(body['success']){
+      SharedPreferences localStorage = await SharedPreferences.getInstance();
+
+      localStorage.setString('token', json.encode(body['access_token']));
+      localStorage.setString('user', json.encode(body['user']));
+      localStorage.setString('actor', json.encode(body['actor']));
+      localStorage.setBool('isLoggedIn',true);
+
+      print(body);
+
+
+
+      bool isLoggedIn = localStorage.getBool('isLoggedIn');
+
+      print(isLoggedIn);
+
+
+      Navigator.push(
+        context,
+        new MaterialPageRoute(
+            builder: (context) => MapScreen()
+        ),
+      );
+    }
+    setState(() {
+      _isLoading = false;
+    });
   }
 }
